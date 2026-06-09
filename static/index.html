@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JLPT N4 — Daily Drill</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#191d33; --panel2:#212740; --ink:#eef1ff; --muted:#9aa3c7;
+    --accent:#6d8bff; --good:#34d399; --bad:#fb7185; --line:#2c3354; --chip:#2a3357;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:linear-gradient(180deg,#0c0f1c,#0f1220);color:var(--ink);line-height:1.6;min-height:100vh}
+  .wrap{max-width:780px;margin:0 auto;padding:20px 16px 80px}
+  header h1{font-size:20px;margin:0 0 2px}
+  header .sub{color:var(--muted);font-size:13px}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}
+  .chip{background:var(--chip);color:var(--ink);border-radius:999px;padding:4px 11px;font-size:12px;border:1px solid var(--line)}
+  .chip b{color:#fff}
+  .progress{height:8px;background:var(--panel2);border-radius:999px;overflow:hidden;margin:10px 0 0}
+  .progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#9b7bff);transition:width .3s}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+  .qmeta{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .sectionTag{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:2px 8px;font-weight:600;letter-spacing:.3px}
+  .instr{color:var(--muted);font-size:13px;margin:2px 0 10px}
+  .stem{font-size:20px;margin:6px 0 4px}
+  .stem .target{background:rgba(109,139,255,.22);border-bottom:2px solid var(--accent);padding:0 4px;border-radius:4px}
+  .passage{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:16px;margin:4px 0 12px}
+  ruby rt{color:var(--muted);font-size:.6em}
+  .furi{color:var(--muted);font-size:13px;margin-top:4px;display:none}
+  .choices{display:grid;gap:9px;margin-top:12px}
+  .choice{display:flex;gap:10px;align-items:flex-start;text-align:left;background:var(--panel2);border:1px solid var(--line);
+    color:var(--ink);border-radius:12px;padding:12px 14px;font-size:16px;cursor:pointer;transition:.12s;width:100%}
+  .choice:hover:not(.disabled){border-color:var(--accent)}
+  .choice .num{flex:0 0 22px;height:22px;border-radius:6px;background:var(--chip);display:grid;place-items:center;font-size:13px;color:var(--muted)}
+  .choice.correct{border-color:var(--good);background:rgba(52,211,153,.12)}
+  .choice.wrong{border-color:var(--bad);background:rgba(251,113,133,.12)}
+  .choice.disabled{cursor:default;opacity:.92}
+  .reveal{display:none;margin-top:14px;border-top:1px dashed var(--line);padding-top:12px}
+  .reveal .row{margin:7px 0;font-size:14px}
+  .reveal .lbl{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.4px;margin-right:6px}
+  .verdict{font-weight:700}
+  .verdict.ok{color:var(--good)} .verdict.no{color:var(--bad)}
+  .nav{display:flex;gap:10px;margin-top:14px}
+  button.btn{background:var(--accent);color:#fff;border:0;border-radius:10px;padding:10px 16px;font-size:15px;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+  button:disabled{opacity:.4;cursor:default}
+  .footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px;color:var(--muted);font-size:12px}
+  .footer a{color:var(--accent);cursor:pointer;text-decoration:underline}
+  .done{text-align:center;padding:30px 10px}
+  .done .big{font-size:42px;font-weight:800}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 12px;margin:4px;font-size:13px}
+  .hidden{display:none}
+  .weak{color:#ffd479}
+  /* loader */
+  .loader{display:flex;flex-direction:column;align-items:center;gap:16px;padding:60px 0;color:var(--muted)}
+  .spinner{width:40px;height:40px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .error-box{background:rgba(251,113,133,.1);border:1px solid var(--bad);border-radius:12px;padding:16px;color:var(--bad);margin:20px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>JLPT N4 — Daily Drill 🎌</h1>
+    <div class="sub">50 soal pilihan ganda setiap hari · 文字 / 語彙 / 文法 / 読解 · tanpa 聴解</div>
+  </header>
+
+  <div class="bar">
+    <span class="chip">📅 <b id="todayStr">—</b></span>
+    <span class="chip">Soal <b id="qNow">1</b>/<b id="qTotal">50</b></span>
+    <span class="chip">Benar <b id="scoreNow">0</b></span>
+    <span class="chip" id="weakChip" title="Soal yang pernah salah dan sedang diulang">🔁 Ulangan <b id="weakCount">0</b></span>
+  </div>
+  <div class="progress"><i id="pbar"></i></div>
+
+  <div id="quiz">
+    <div class="loader"><div class="spinner"></div><span>Memuat soal harian…</span></div>
+  </div>
+
+  <div class="footer">
+    <div>Pool soal: <b id="poolCount">—</b> · Komposisi 10 漢字 / 10 漢字(逆) / 10 文法 / 15 語彙 / 5 読解</div>
+    <div>
+      <a id="resetSession">Ulang hari ini</a> ·
+      <a id="resetAll">Hapus semua progres</a>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   CONFIG — change BASE_URL if your API is deployed elsewhere
+   ===================================================================== */
+const BASE_URL = "";   // same origin; for local dev: "http://localhost:8000"
+
+/* =====================================================================
+   LOCAL-STORAGE SESSION (answers only — stats live on the server)
+   ===================================================================== */
+const STORE_SESS = "jlpt_n4_session_v2";
+
+function loadSession(){ try{return JSON.parse(localStorage.getItem(STORE_SESS))||null;}catch(e){return null;} }
+function saveSession(s){ localStorage.setItem(STORE_SESS, JSON.stringify(s)); }
+function clearSession(){ localStorage.removeItem(STORE_SESS); }
+
+/* =====================================================================
+   STATE
+   ===================================================================== */
+let SET   = null;   // daily payload from /api/daily
+let pos   = 0;
+let answers = [];
+let score = 0;
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+async function boot(){
+  try{
+    // load pool count
+    const pool = await apiFetch("/api/pool");
+    document.getElementById("poolCount").textContent = pool.total;
+
+    // load daily set (server-cached per day)
+    SET = await apiFetch("/api/daily");
+    document.getElementById("todayStr").textContent  = SET.date;
+    document.getElementById("qTotal").textContent    = SET.items.length;
+    document.getElementById("weakCount").textContent = SET.weak;
+
+    // restore or init session
+    const saved = loadSession();
+    if(saved && saved.date === SET.date && saved.answers?.length === SET.items.length){
+      answers = saved.answers;
+      score   = answers.filter(a=>a&&a.correct).length;
+      pos     = answers.findIndex(a=>a===null);
+      if(pos<0) pos = SET.items.length - 1;
+    } else {
+      answers = new Array(SET.items.length).fill(null);
+      score=0; pos=0;
+      saveSession({date:SET.date, answers});
+    }
+
+    render();
+  } catch(err){
+    document.getElementById("quiz").innerHTML =
+      `<div class="error-box">⚠️ Gagal memuat soal: ${escHtml(err.message)}<br>
+       <small>Pastikan server berjalan dan sudah ada soal di database.</small></div>`;
+  }
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function render(){
+  const quiz = document.getElementById("quiz");
+  if(pos >= SET.items.length){ renderDone(); return; }
+
+  const q    = SET.items[pos];
+  const prev = answers[pos];
+
+  document.getElementById("qNow").textContent    = pos+1;
+  document.getElementById("scoreNow").textContent= score;
+  document.getElementById("pbar").style.width    = (pos/SET.items.length*100)+"%";
+
+  let html = `<div class="card">
+    <div class="qmeta">
+      <span class="sectionTag">${escHtml(q._plan)}</span>
+      <span>${escHtml(q.level||"N4")} · #${escHtml(q.id)}</span>
+    </div>
+    <div class="instr">${escHtml(q.instruction||"")}</div>`;
+
+  if(q.passage) html += `<div class="passage">${renderRuby(q.passage)}</div>`;
+
+  html += `<div class="stem">${renderStem(q.question)}</div>`;
+  html += `<div class="furi" id="furi">よみ: ${escHtml(q.furigana||"")}</div>`;
+  html += `<div class="choices" id="choices">`;
+
+  q._choiceOrder.forEach((origIdx, shownIdx)=>{
+    html += `<button class="choice" data-shown="${shownIdx}">
+      <span class="num">${shownIdx+1}</span>
+      <span>${escHtml(q.choices[origIdx])}</span>
+    </button>`;
+  });
+
+  html += `</div>
+    <div class="reveal" id="reveal"></div>
+    <div class="nav">
+      <button class="btn ghost" id="prevBtn" ${pos===0?"disabled":""}>← Sebelumnya</button>
+      <button class="btn" id="nextBtn" ${prev?"":"disabled"}>
+        ${pos===SET.items.length-1?"Selesai":"Berikutnya →"}
+      </button>
+    </div>
+  </div>`;
+
+  quiz.innerHTML = html;
+
+  const choiceEls = [...quiz.querySelectorAll(".choice")];
+  if(prev){
+    lockChoices(q, choiceEls, prev.shown);
+    showReveal(q, prev.correct);
+  } else {
+    choiceEls.forEach(el=>
+      el.addEventListener("click", ()=> onAnswer(q, choiceEls, +el.dataset.shown))
+    );
+  }
+
+  document.getElementById("prevBtn").onclick = ()=>{ pos=Math.max(0,pos-1); render(); };
+  document.getElementById("nextBtn").onclick = ()=>{ pos++; render(); };
+}
+
+/* =====================================================================
+   ANSWER
+   ===================================================================== */
+async function onAnswer(q, choiceEls, shownIdx){
+  const correct = shownIdx === q._answerShown;
+  answers[pos] = {shown: shownIdx, correct};
+  if(correct) score++;
+
+  // persist locally
+  saveSession({date:SET.date, answers});
+
+  // push to server (fire-and-forget; UI doesn't block on this)
+  apiFetch("/api/stats","POST",{
+    question_id: q.id,
+    correct,
+    date: SET.date,
+  }).catch(()=>{});  // silent fail — stats will catch up next day
+
+  lockChoices(q, choiceEls, shownIdx);
+  showReveal(q, correct);
+  document.getElementById("nextBtn").disabled = false;
+  document.getElementById("scoreNow").textContent = score;
+}
+
+/* =====================================================================
+   LOCK / REVEAL
+   ===================================================================== */
+function lockChoices(q, choiceEls, shownIdx){
+  choiceEls.forEach(el=>{
+    el.classList.add("disabled");
+    el.style.cursor = "default";
+    el.onclick = null;
+    const s = +el.dataset.shown;
+    if(s === q._answerShown)          el.classList.add("correct");
+    if(s === shownIdx && shownIdx !== q._answerShown) el.classList.add("wrong");
+  });
+  const f = document.getElementById("furi");
+  if(f) f.style.display = "block";
+}
+
+function showReveal(q, correct){
+  const r = document.getElementById("reveal");
+  r.style.display = "block";
+  r.innerHTML = `
+    <div class="row verdict ${correct?"ok":"no"}">${correct?"○ Benar!":"✕ Salah"}</div>
+    <div class="row"><span class="lbl">Terjemahan</span>${escHtml(q.translation||"")}</div>
+    <div class="row"><span class="lbl">Penjelasan</span>${escHtml(q.explanation||"")}</div>`;
+}
+
+/* =====================================================================
+   DONE SCREEN
+   ===================================================================== */
+function renderDone(){
+  document.getElementById("pbar").style.width = "100%";
+  const total = SET.items.length;
+  const pct   = Math.round(score/total*100);
+
+  const bySec = {};
+  SET.items.forEach((q,i)=>{
+    const a = answers[i];
+    bySec[q._plan] = bySec[q._plan]||{c:0,t:0};
+    bySec[q._plan].t++;
+    if(a&&a.correct) bySec[q._plan].c++;
+  });
+  const pills = Object.entries(bySec)
+    .map(([k,v])=>`<span class="pill">${escHtml(k)}: <b>${v.c}/${v.t}</b></span>`)
+    .join("");
+
+  const wrongCount = SET.items.filter((_,i)=>answers[i]&&!answers[i].correct).length;
+
+  document.getElementById("quiz").innerHTML = `<div class="card done">
+    <div class="big">${pct}%</div>
+    <div>Skor hari ini: <b>${score}/${total}</b></div>
+    <div style="margin:14px 0">${pills}</div>
+    <div class="${wrongCount?"weak":""}">
+      ${wrongCount
+        ? "🔁 "+wrongCount+" soal salah disimpan & akan lebih sering muncul di hari berikutnya."
+        : "Sempurna! Tidak ada yang salah. 🎉"}
+    </div>
+    <div class="nav" style="justify-content:center;margin-top:18px">
+      <button class="btn ghost" id="reviewWrong" ${wrongCount?"":"disabled"}>Tinjau yang salah</button>
+      <button class="btn" id="backTop">Lihat ulang dari awal</button>
+    </div>
+  </div>`;
+
+  document.getElementById("backTop").onclick = ()=>{ pos=0; render(); };
+  const rw = document.getElementById("reviewWrong");
+  if(wrongCount){
+    rw.onclick = ()=>{
+      const i = SET.items.findIndex((_,idx)=>answers[idx]&&!answers[idx].correct);
+      pos=i; render();
+    };
+  }
+
+  document.getElementById("qNow").textContent = total;
+}
+
+/* =====================================================================
+   RESET CONTROLS
+   ===================================================================== */
+document.getElementById("resetSession").onclick = ()=>{
+  clearSession(); pos=0;
+  answers = new Array(SET.items.length).fill(null);
+  score=0;
+  saveSession({date:SET.date, answers});
+  render();
+};
+
+document.getElementById("resetAll").onclick = async ()=>{
+  if(!confirm("Hapus semua progres & statistik soal salah?")) return;
+  try{
+    await apiFetch("/api/stats","DELETE");
+    clearSession();
+    pos=0; score=0;
+    // also bust server daily cache by refetching
+    SET = await apiFetch("/api/daily");
+    document.getElementById("weakCount").textContent = SET.weak;
+    answers = new Array(SET.items.length).fill(null);
+    saveSession({date:SET.date, answers});
+    render();
+  }catch(e){
+    alert("Gagal reset stats: "+e.message);
+  }
+};
+
+/* =====================================================================
+   UTILS
+   ===================================================================== */
+function renderRuby(text){
+  if(!text) return "";
+  const esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return esc.replace(/([一-龯々〆々]+)[（(]([ぁ-んァ-ヶー]+)[）)]/g,
+    "<ruby>$1<rt>$2</rt></ruby>");
+}
+
+function renderStem(text){
+  const esc=(text||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return esc.replace(/【(.+?)】/g,'<span class="target">$1</span>');
+}
+
+function escHtml(s){
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+async function apiFetch(path, method="GET", body=null){
+  const opts = {
+    method,
+    headers:{"Content-Type":"application/json"},
+  };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(BASE_URL+path, opts);
+  if(method==="DELETE" && res.status===204) return null;
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+/* =====================================================================
+   START
+   ===================================================================== */
+boot();
+</script>
+</body>
+</html>
