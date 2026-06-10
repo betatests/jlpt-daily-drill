@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
-seed_db.py — populate the SQLite database with the original JLPT N4 question bank.
+seed_db.py — populate the Turso database with the original JLPT N4 question bank.
 
 Usage:
-    python seed_db.py                    # writes to /tmp/jlpt.db  (default)
-    DB_PATH=./dev.db python seed_db.py   # custom path
+    set -a && source .env.development.local && set +a
+    python seed_db.py
 """
 import json, os, sys
 
 # allow running from project root without installing the package
 sys.path.insert(0, os.path.dirname(__file__))
-os.environ.setdefault("DB_PATH", "/tmp/jlpt.db")
 
 from api.database import init_db, get_db
 

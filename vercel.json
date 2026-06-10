@@ -23,7 +23,4 @@
       "dest": "api/index.py"
     }
   ],
-  "env": {
-    "DB_PATH": "/tmp/jlpt.db"
-  }
 }

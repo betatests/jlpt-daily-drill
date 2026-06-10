@@ -3,13 +3,9 @@ import os
 
 
 def get_db():
-    url = os.environ.get("TURSO_DATABASE_URL")
-    token = os.environ.get("TURSO_AUTH_TOKEN")
-    if url and token:
-        return libsql.connect(url, auth_token=token)
-    # Local file fallback for dev when Turso env vars are not set
-    local_db = os.environ.get("DB_PATH", "/tmp/jlpt.db")
-    return libsql.connect(local_db)
+    url = os.environ["TURSO_DATABASE_URL"]
+    token = os.environ["TURSO_AUTH_TOKEN"]
+    return libsql.connect(url, auth_token=token)
 
 
 def init_db():
