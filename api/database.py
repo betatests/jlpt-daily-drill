@@ -1,54 +1,57 @@
-import sqlite3
+import libsql
 import os
 
-# On Vercel, /tmp is the only writable directory at runtime.
-# For local dev, fall back to a local file.
-DB_PATH = os.environ.get("DB_PATH", "/tmp/jlpt.db")
+TURSO_DATABASE_URL = os.environ.get("TURSO_DATABASE_URL")
+TURSO_AUTH_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+
+# Local file fallback for dev when Turso env vars are not set
+_LOCAL_DB = os.environ.get("DB_PATH", "/tmp/jlpt.db")
 
 
-def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+def get_db():
+    if TURSO_DATABASE_URL and TURSO_AUTH_TOKEN:
+        return libsql.connect(TURSO_DATABASE_URL, auth_token=TURSO_AUTH_TOKEN)
+    return libsql.connect(_LOCAL_DB)
 
 
 def init_db():
     conn = get_db()
     try:
-        conn.executescript("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS questions (
                 id          TEXT PRIMARY KEY,
-                section     TEXT NOT NULL,          -- kanji | kanji_reverse | bunpou | kotoba | reading
+                section     TEXT NOT NULL,
                 level       TEXT NOT NULL DEFAULT 'N4',
                 instruction TEXT NOT NULL DEFAULT '',
                 passage     TEXT NOT NULL DEFAULT '',
                 question    TEXT NOT NULL,
                 furigana    TEXT NOT NULL DEFAULT '',
-                choices     TEXT NOT NULL,          -- JSON array of strings
-                answer      INTEGER NOT NULL,       -- index into choices (0-based)
+                choices     TEXT NOT NULL,
+                answer      INTEGER NOT NULL,
                 explanation TEXT NOT NULL DEFAULT '',
                 translation TEXT NOT NULL DEFAULT ''
-            );
-
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS stats (
                 question_id TEXT PRIMARY KEY,
                 seen        INTEGER NOT NULL DEFAULT 0,
                 wrong       INTEGER NOT NULL DEFAULT 0,
                 correct     INTEGER NOT NULL DEFAULT 0,
-                last        TEXT,                   -- 'o' or 'x'
+                last        TEXT,
                 last_date   TEXT
-            );
-
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS daily_cache (
                 date_key    TEXT PRIMARY KEY,
-                payload     TEXT NOT NULL,          -- JSON blob of the full daily response
+                payload     TEXT NOT NULL,
                 created_at  INTEGER NOT NULL
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_questions_section ON questions(section);
+            )
         """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_questions_section ON questions(section)"
+        )
         conn.commit()
     finally:
         conn.close()
