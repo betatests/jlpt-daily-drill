@@ -2,10 +2,53 @@ import libsql
 import os
 
 
-def get_db():
+class _Row:
+    """Wraps a tuple row to support column-name access (like sqlite3.Row)."""
+    def __init__(self, row, columns):
+        self._row = row
+        self._map = dict(zip(columns, row))
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._row[key]
+        return self._map[key]
+
+
+class _Cursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+        self._columns = [c[0] for c in (cursor.description or [])]
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return _Row(row, self._columns) if row is not None else None
+
+    def fetchall(self):
+        return [_Row(row, self._columns) for row in self._cursor.fetchall()]
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+
+class _Connection:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        return _Cursor(self._conn.execute(sql, params))
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
+
+
+def get_db() -> _Connection:
     url = os.environ["TURSO_DATABASE_URL"]
     token = os.environ["TURSO_AUTH_TOKEN"]
-    return libsql.connect(url, auth_token=token)
+    return _Connection(libsql.connect(url, auth_token=token))
 
 
 def init_db():
