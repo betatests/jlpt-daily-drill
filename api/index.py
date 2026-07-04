@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 
 from .database import get_db, init_db
 from .daily import build_daily_set, get_cached_daily, save_cached_daily
-from .models import Question, QuestionIn, StatsUpdateIn, DailySession
+from .unlimited import build_unlimited_batch
+from .models import Question, QuestionIn, StatsUpdateIn, DailySession, VALID_SECTIONS
 
 app = FastAPI(title="JLPT N4 Daily Drill API")
 
@@ -139,6 +140,43 @@ def get_daily(date: Optional[str] = None):
     return daily
 
 
+# ── Unlimited mode ────────────────────────────────────────────────────────────
+@app.get("/api/unlimited/next")
+def get_unlimited_next(count: int = Query(8, ge=1, le=20), section: Optional[str] = None):
+    """
+    Returns a fresh, never-cached batch of questions for endless drilling.
+
+    Prioritizes never-seen questions first, then high-error-rate questions,
+    while still letting long-mastered questions resurface over time via a
+    recency-based score decay. Balances across the 5 question sections and
+    avoids immediately repeating a small window of recently-served items.
+
+    Query params:
+      count   - how many questions to return (1-20, default 8)
+      section - optional filter to one section (kanji, kanji_reverse,
+                bunpou, kotoba, reading)
+    """
+    if section and section not in VALID_SECTIONS:
+        raise HTTPException(400, f"section must be one of {sorted(VALID_SECTIONS)}")
+
+    db = get_db()
+    try:
+        if section:
+            rows = db.execute("SELECT * FROM questions WHERE section=?", (section,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM questions").fetchall()
+    finally:
+        db.close()
+
+    if not rows:
+        raise HTTPException(404, "No questions in database yet. POST some via /api/questions/bulk")
+
+    questions = [_row_to_question(r).dict() for r in rows]
+    stats = _load_all_stats()
+    batch = build_unlimited_batch(questions, stats, count, section_filter=section)
+    return batch
+
+
 # ── Stats ─────────────────────────────────────────────────────────────────────
 @app.get("/api/stats")
 def get_stats():
@@ -177,7 +215,8 @@ def update_stats(body: StatsUpdateIn):
                  "o" if body.correct else "x", body.date)
             )
         db.commit()
-        # invalidate today's cache so next /api/daily re-weights
+        # invalidate today's daily cache so next /api/daily re-weights
+        # (unlimited mode is never cached, so nothing to invalidate there)
         _invalidate_daily_cache(body.date)
         return {"ok": True}
     finally:
@@ -231,7 +270,8 @@ def _load_all_stats() -> dict:
     try:
         rows = db.execute("SELECT * FROM stats").fetchall()
         return {r["question_id"]: {
-            "seen": r["seen"], "wrong": r["wrong"], "correct": r["correct"]
+            "seen": r["seen"], "wrong": r["wrong"], "correct": r["correct"],
+            "last_date": r["last_date"],
         } for r in rows}
     finally:
         db.close()

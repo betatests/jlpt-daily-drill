@@ -86,6 +86,13 @@ def init_db():
                 created_at  INTEGER NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS unlimited_recent (
+                seq         INTEGER PRIMARY KEY AUTOINCREMENT,
+                question_id TEXT NOT NULL,
+                served_at   INTEGER NOT NULL
+            )
+        """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_questions_section ON questions(section)"
         )

@@ -52,11 +52,31 @@ def _mulberry32(seed: int):
 
 
 def _shuffle(lst: list, rng) -> list:
+    """rng is a zero-arg callable returning a float in [0,1)."""
     arr = lst[:]
     for i in range(len(arr) - 1, 0, -1):
         j = int(rng() * (i + 1))
         arr[i], arr[j] = arr[j], arr[i]
     return arr
+
+
+# ── Shared enrichment helper (used by both daily.py and unlimited.py) ────────
+def enrich_question_choices(q: dict, rng) -> dict:
+    """
+    Shuffles a question's choices using the given rng (zero-arg callable
+    returning float in [0,1)) and attaches:
+      _choiceOrder -> [shown_pos] = original_idx
+      _answerShown -> shown position of the correct answer
+    Returns a new dict; does not mutate the input.
+    """
+    idx = list(range(len(q["choices"])))
+    idx = _shuffle(idx, rng)
+    answer_shown = idx.index(q["answer"])
+
+    enriched = dict(q)
+    enriched["_choiceOrder"] = idx
+    enriched["_answerShown"] = answer_shown
+    return enriched
 
 
 # ── Weighted pick ─────────────────────────────────────────────────────────────
@@ -110,15 +130,9 @@ def build_daily_set(date_key: str, questions: list, stats: dict) -> dict:
                 weak += 1
 
             # shuffle choice order deterministically
-            crng   = _mulberry32(_hash_str(f"{date_key}|{q['id']}|choices"))
-            idx    = list(range(len(q["choices"])))
-            idx    = _shuffle(idx, crng)
-            answer_shown = idx.index(q["answer"])
-
-            enriched = dict(q)
-            enriched["_plan"]        = plan["label"]
-            enriched["_choiceOrder"] = idx          # [shown_pos] -> original_idx
-            enriched["_answerShown"] = answer_shown  # shown position of correct answer
+            crng = _mulberry32(_hash_str(f"{date_key}|{q['id']}|choices"))
+            enriched = enrich_question_choices(q, crng)
+            enriched["_plan"] = plan["label"]
             items.append(enriched)
 
     return {"date": date_key, "weak": weak, "items": items}
