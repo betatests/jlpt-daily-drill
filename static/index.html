@@ -15,11 +15,20 @@
   .wrap{max-width:780px;margin:0 auto;padding:20px 16px 80px}
   header h1{font-size:20px;margin:0 0 2px}
   header .sub{color:var(--muted);font-size:13px}
+  .modeBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0 0}
+  .modeBtn{background:var(--panel2);color:var(--muted);border:1px solid var(--line);border-radius:999px;
+    padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600}
+  .modeBtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .sectionFilter{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:5px 8px;font-size:12px;margin-left:auto}
   .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0}
   .chip{background:var(--chip);color:var(--ink);border-radius:999px;padding:4px 11px;font-size:12px;border:1px solid var(--line)}
   .chip b{color:#fff}
   .progress{height:8px;background:var(--panel2);border-radius:999px;overflow:hidden;margin:10px 0 0}
   .progress>i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#9b7bff);transition:width .3s}
+  .progress.infinite>i{background:repeating-linear-gradient(90deg,var(--accent) 0 20px,#9b7bff 20px 40px);width:100%;
+    animation:slide 1.2s linear infinite}
+  @keyframes slide{from{background-position:0 0}to{background-position:40px 0}}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin:16px 0;box-shadow:0 8px 30px rgba(0,0,0,.25)}
   .qmeta{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:6px}
   .sectionTag{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:2px 8px;font-weight:600;letter-spacing:.3px}
@@ -67,13 +76,26 @@
     <div class="sub">50 soal pilihan ganda setiap hari · 文字 / 語彙 / 文法 / 読解 · tanpa 聴解</div>
   </header>
 
-  <div class="bar">
-    <span class="chip">📅 <b id="todayStr">—</b></span>
-    <span class="chip">Soal <b id="qNow">1</b>/<b id="qTotal">50</b></span>
-    <span class="chip">Benar <b id="scoreNow">0</b></span>
-    <span class="chip" id="weakChip" title="Soal yang pernah salah dan sedang diulang">🔁 Ulangan <b id="weakCount">0</b></span>
+  <div class="modeBar">
+    <button class="modeBtn" id="modeDaily">📅 Harian</button>
+    <button class="modeBtn" id="modeUnlimited">🎲 Unlimited</button>
+    <select class="sectionFilter hidden" id="sectionFilter">
+      <option value="">Semua bagian</option>
+      <option value="kanji">漢字 → よみ</option>
+      <option value="kanji_reverse">よみ → 漢字</option>
+      <option value="bunpou">文法</option>
+      <option value="kotoba">語彙</option>
+      <option value="reading">読解</option>
+    </select>
   </div>
-  <div class="progress"><i id="pbar"></i></div>
+
+  <div class="bar">
+    <span class="chip" id="dateChip">📅 <b id="todayStr">—</b></span>
+    <span class="chip">Soal <b id="qNow">1</b><span id="qTotalWrap">/<b id="qTotal">50</b></span><span id="infinityWrap" class="hidden"> ∞</span></span>
+    <span class="chip">Benar <b id="scoreNow">0</b></span>
+    <span class="chip hidden" id="weakChip" title="Soal yang pernah salah dan sedang diulang">🔁 Ulangan <b id="weakCount">0</b></span>
+  </div>
+  <div class="progress" id="progressBar"><i id="pbar"></i></div>
 
   <div id="quiz">
     <div class="loader"><div class="spinner"></div><span>Memuat soal harian…</span></div>
@@ -82,7 +104,7 @@
   <div class="footer">
     <div>Pool soal: <b id="poolCount">—</b> · Komposisi 10 漢字 / 10 漢字(逆) / 10 文法 / 15 語彙 / 5 読解</div>
     <div>
-      <a id="resetSession">Ulang hari ini</a> ·
+      <a id="resetSession">Ulang sesi ini</a> ·
       <a id="resetAll">Hapus semua progres</a>
     </div>
   </div>
@@ -94,17 +116,29 @@
    ===================================================================== */
 const BASE_URL = "";   // same origin; for local dev: "http://localhost:8000"
 
+const SECTION_LABELS = {
+  kanji: "漢字 → よみ", kanji_reverse: "よみ → 漢字",
+  bunpou: "文法", kotoba: "語彙", reading: "読解"
+};
+
 /* =====================================================================
-   LOCAL-STORAGE SESSION (answers only — stats live on the server)
+   LOCAL-STORAGE KEYS
    ===================================================================== */
-const STORE_SESS = "jlpt_n4_session_v2";
+const STORE_MODE       = "jlpt_n4_mode";
+const STORE_SESS       = "jlpt_n4_session_v2";      // daily mode answers
+const STORE_UNLIMITED  = "jlpt_n4_unlimited_v1";    // unlimited mode session
 
-function loadSession(){ try{return JSON.parse(localStorage.getItem(STORE_SESS))||null;}catch(e){return null;} }
-function saveSession(s){ localStorage.setItem(STORE_SESS, JSON.stringify(s)); }
-function clearSession(){ localStorage.removeItem(STORE_SESS); }
+function loadJSON(key){ try{return JSON.parse(localStorage.getItem(key))||null;}catch(e){return null;} }
+function saveJSON(key,val){ localStorage.setItem(key, JSON.stringify(val)); }
+function clearKey(key){ localStorage.removeItem(key); }
 
 /* =====================================================================
-   STATE
+   MODE STATE
+   ===================================================================== */
+let MODE = localStorage.getItem(STORE_MODE) || "daily";
+
+/* =====================================================================
+   DAILY MODE STATE
    ===================================================================== */
 let SET   = null;   // daily payload from /api/daily
 let pos   = 0;
@@ -112,22 +146,74 @@ let answers = [];
 let score = 0;
 
 /* =====================================================================
-   BOOT
+   UNLIMITED MODE STATE
+   ===================================================================== */
+let U = { items: [], answers: [], pos: 0, score: 0, sectionFilter: "" };
+let uFetching = false;
+
+/* =====================================================================
+   BOOT / MODE SWITCH
    ===================================================================== */
 async function boot(){
+  applyModeUI();
+  if(MODE === "unlimited"){
+    await bootUnlimited();
+  } else {
+    await bootDaily();
+  }
+}
+
+function applyModeUI(){
+  document.getElementById("modeDaily").classList.toggle("active", MODE==="daily");
+  document.getElementById("modeUnlimited").classList.toggle("active", MODE==="unlimited");
+  document.getElementById("sectionFilter").classList.toggle("hidden", MODE!=="unlimited");
+  document.getElementById("qTotalWrap").classList.toggle("hidden", MODE==="unlimited");
+  document.getElementById("infinityWrap").classList.toggle("hidden", MODE!=="unlimited");
+  document.getElementById("weakChip").classList.toggle("hidden", MODE!=="daily");
+  document.getElementById("dateChip").classList.toggle("hidden", MODE!=="daily");
+  document.getElementById("progressBar").classList.toggle("infinite", MODE==="unlimited");
+  if(MODE==="unlimited") document.getElementById("pbar").style.width = "";
+}
+
+async function switchMode(m){
+  if(MODE === m) return;
+  MODE = m;
+  localStorage.setItem(STORE_MODE, m);
+  applyModeUI();
+  document.getElementById("quiz").innerHTML =
+    `<div class="loader"><div class="spinner"></div><span>Memuat soal…</span></div>`;
+  if(m === "unlimited"){
+    await bootUnlimited();
+  } else {
+    await bootDaily();
+  }
+}
+
+document.getElementById("modeDaily").onclick = ()=> switchMode("daily");
+document.getElementById("modeUnlimited").onclick = ()=> switchMode("unlimited");
+document.getElementById("sectionFilter").onchange = async (e)=>{
+  U.sectionFilter = e.target.value;
+  U.items = []; U.answers = []; U.pos = 0; U.score = 0;
+  persistUnlimited();
+  document.getElementById("quiz").innerHTML =
+    `<div class="loader"><div class="spinner"></div><span>Memuat soal…</span></div>`;
+  await bootUnlimited(true);
+};
+
+/* =====================================================================
+   BOOT: DAILY
+   ===================================================================== */
+async function bootDaily(){
   try{
-    // load pool count
     const pool = await apiFetch("/api/pool");
     document.getElementById("poolCount").textContent = pool.total;
 
-    // load daily set (server-cached per day)
     SET = await apiFetch("/api/daily");
     document.getElementById("todayStr").textContent  = SET.date;
     document.getElementById("qTotal").textContent    = SET.items.length;
     document.getElementById("weakCount").textContent = SET.weak;
 
-    // restore or init session
-    const saved = loadSession();
+    const saved = loadJSON(STORE_SESS);
     if(saved && saved.date === SET.date && saved.answers?.length === SET.items.length){
       answers = saved.answers;
       score   = answers.filter(a=>a&&a.correct).length;
@@ -136,7 +222,7 @@ async function boot(){
     } else {
       answers = new Array(SET.items.length).fill(null);
       score=0; pos=0;
-      saveSession({date:SET.date, answers});
+      saveJSON(STORE_SESS, {date:SET.date, answers});
     }
 
     render();
@@ -148,7 +234,66 @@ async function boot(){
 }
 
 /* =====================================================================
-   RENDER
+   BOOT: UNLIMITED
+   ===================================================================== */
+async function bootUnlimited(forceFresh){
+  try{
+    const pool = await apiFetch("/api/pool");
+    document.getElementById("poolCount").textContent = pool.total;
+
+    const saved = !forceFresh && loadJSON(STORE_UNLIMITED);
+    if(saved && saved.items?.length){
+      U = {
+        items: saved.items, answers: saved.answers,
+        pos: saved.pos||0, score: saved.score||0,
+        sectionFilter: saved.sectionFilter||""
+      };
+      document.getElementById("sectionFilter").value = U.sectionFilter;
+    } else {
+      const batch = await fetchUnlimitedBatch(8);
+      U = { items: batch, answers: batch.map(()=>null), pos: 0, score: 0, sectionFilter: U.sectionFilter||"" };
+      persistUnlimited();
+    }
+
+    renderUnlimited();
+    ensureUnlimitedBuffer();
+  } catch(err){
+    document.getElementById("quiz").innerHTML =
+      `<div class="error-box">⚠️ Gagal memuat soal: ${escHtml(err.message)}<br>
+       <small>Pastikan server berjalan dan sudah ada soal di database.</small></div>`;
+  }
+}
+
+async function fetchUnlimitedBatch(n){
+  const qs = new URLSearchParams({count: String(n)});
+  if(U.sectionFilter) qs.set("section", U.sectionFilter);
+  const res = await apiFetch("/api/unlimited/next?"+qs.toString());
+  return res.items;
+}
+
+async function ensureUnlimitedBuffer(){
+  const ahead = U.items.length - U.pos;
+  if(ahead < 3 && !uFetching){
+    uFetching = true;
+    try{
+      const more = await fetchUnlimitedBatch(8);
+      U.items.push(...more);
+      U.answers.push(...more.map(()=>null));
+      persistUnlimited();
+    } catch(e){ /* silent — buffer will just be shorter this time */ }
+    finally { uFetching = false; }
+  }
+}
+
+function persistUnlimited(){
+  saveJSON(STORE_UNLIMITED, {
+    items: U.items, answers: U.answers,
+    pos: U.pos, score: U.score, sectionFilter: U.sectionFilter
+  });
+}
+
+/* =====================================================================
+   RENDER: DAILY (unchanged behavior)
    ===================================================================== */
 function render(){
   const quiz = document.getElementById("quiz");
@@ -207,23 +352,18 @@ function render(){
   document.getElementById("nextBtn").onclick = ()=>{ pos++; render(); };
 }
 
-/* =====================================================================
-   ANSWER
-   ===================================================================== */
 async function onAnswer(q, choiceEls, shownIdx){
   const correct = shownIdx === q._answerShown;
   answers[pos] = {shown: shownIdx, correct};
   if(correct) score++;
 
-  // persist locally
-  saveSession({date:SET.date, answers});
+  saveJSON(STORE_SESS, {date:SET.date, answers});
 
-  // push to server (fire-and-forget; UI doesn't block on this)
   apiFetch("/api/stats","POST",{
     question_id: q.id,
     correct,
     date: SET.date,
-  }).catch(()=>{});  // silent fail — stats will catch up next day
+  }).catch(()=>{});
 
   lockChoices(q, choiceEls, shownIdx);
   showReveal(q, correct);
@@ -232,7 +372,94 @@ async function onAnswer(q, choiceEls, shownIdx){
 }
 
 /* =====================================================================
-   LOCK / REVEAL
+   RENDER: UNLIMITED
+   ===================================================================== */
+function renderUnlimited(){
+  const quiz = document.getElementById("quiz");
+
+  if(U.pos >= U.items.length){
+    quiz.innerHTML = `<div class="loader"><div class="spinner"></div><span>Memuat soal berikutnya…</span></div>`;
+    ensureUnlimitedBuffer().then(()=>{ if(U.pos < U.items.length) renderUnlimited(); });
+    return;
+  }
+
+  const q    = U.items[U.pos];
+  const prev = U.answers[U.pos];
+
+  document.getElementById("qNow").textContent     = U.pos+1;
+  document.getElementById("scoreNow").textContent = U.score;
+
+  let html = `<div class="card">
+    <div class="qmeta">
+      <span class="sectionTag">${escHtml(SECTION_LABELS[q.section]||q.section)}</span>
+      <span>${escHtml(q.level||"N4")} · #${escHtml(q.id)}</span>
+    </div>
+    <div class="instr">${escHtml(q.instruction||"")}</div>`;
+
+  if(q.passage) html += `<div class="passage">${renderRuby(q.passage)}</div>`;
+
+  html += `<div class="stem">${renderStem(q.question)}</div>`;
+  html += `<div class="furi" id="furi">よみ: ${escHtml(q.furigana||"")}</div>`;
+  html += `<div class="choices" id="choices">`;
+
+  q._choiceOrder.forEach((origIdx, shownIdx)=>{
+    html += `<button class="choice" data-shown="${shownIdx}">
+      <span class="num">${shownIdx+1}</span>
+      <span>${escHtml(q.choices[origIdx])}</span>
+    </button>`;
+  });
+
+  html += `</div>
+    <div class="reveal" id="reveal"></div>
+    <div class="nav">
+      <button class="btn ghost" id="prevBtn" ${U.pos===0?"disabled":""}>← Sebelumnya</button>
+      <button class="btn" id="nextBtn" ${prev?"":"disabled"}>Berikutnya →</button>
+    </div>
+  </div>`;
+
+  quiz.innerHTML = html;
+
+  const choiceEls = [...quiz.querySelectorAll(".choice")];
+  if(prev){
+    lockChoices(q, choiceEls, prev.shown);
+    showReveal(q, prev.correct);
+  } else {
+    choiceEls.forEach(el=>
+      el.addEventListener("click", ()=> onAnswerUnlimited(q, choiceEls, +el.dataset.shown))
+    );
+  }
+
+  document.getElementById("prevBtn").onclick = ()=>{ U.pos=Math.max(0,U.pos-1); renderUnlimited(); };
+  document.getElementById("nextBtn").onclick = ()=>{
+    U.pos++; persistUnlimited(); renderUnlimited(); ensureUnlimitedBuffer();
+  };
+}
+
+async function onAnswerUnlimited(q, choiceEls, shownIdx){
+  const correct = shownIdx === q._answerShown;
+  U.answers[U.pos] = {shown: shownIdx, correct};
+  if(correct) U.score++;
+  persistUnlimited();
+
+  apiFetch("/api/stats","POST",{
+    question_id: q.id,
+    correct,
+    date: todayKeyLocal(),
+  }).catch(()=>{});
+
+  lockChoices(q, choiceEls, shownIdx);
+  showReveal(q, correct);
+  document.getElementById("nextBtn").disabled = false;
+  document.getElementById("scoreNow").textContent = U.score;
+}
+
+function todayKeyLocal(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+/* =====================================================================
+   LOCK / REVEAL (shared by both modes)
    ===================================================================== */
 function lockChoices(q, choiceEls, shownIdx){
   choiceEls.forEach(el=>{
@@ -257,7 +484,7 @@ function showReveal(q, correct){
 }
 
 /* =====================================================================
-   DONE SCREEN
+   DONE SCREEN (daily mode only — unlimited never "ends")
    ===================================================================== */
 function renderDone(){
   document.getElementById("pbar").style.width = "100%";
@@ -288,11 +515,13 @@ function renderDone(){
     </div>
     <div class="nav" style="justify-content:center;margin-top:18px">
       <button class="btn ghost" id="reviewWrong" ${wrongCount?"":"disabled"}>Tinjau yang salah</button>
+      <button class="btn ghost" id="goUnlimited">Lanjut ke Unlimited 🎲</button>
       <button class="btn" id="backTop">Lihat ulang dari awal</button>
     </div>
   </div>`;
 
   document.getElementById("backTop").onclick = ()=>{ pos=0; render(); };
+  document.getElementById("goUnlimited").onclick = ()=> switchMode("unlimited");
   const rw = document.getElementById("reviewWrong");
   if(wrongCount){
     rw.onclick = ()=>{
@@ -305,28 +534,43 @@ function renderDone(){
 }
 
 /* =====================================================================
-   RESET CONTROLS
+   RESET CONTROLS (mode-aware)
    ===================================================================== */
 document.getElementById("resetSession").onclick = ()=>{
-  clearSession(); pos=0;
-  answers = new Array(SET.items.length).fill(null);
-  score=0;
-  saveSession({date:SET.date, answers});
-  render();
+  if(MODE === "unlimited"){
+    clearKey(STORE_UNLIMITED);
+    U = { items: [], answers: [], pos: 0, score: 0, sectionFilter: U.sectionFilter };
+    document.getElementById("quiz").innerHTML =
+      `<div class="loader"><div class="spinner"></div><span>Memuat soal…</span></div>`;
+    bootUnlimited(true);
+  } else {
+    clearKey(STORE_SESS); pos=0;
+    answers = new Array(SET.items.length).fill(null);
+    score=0;
+    saveJSON(STORE_SESS, {date:SET.date, answers});
+    render();
+  }
 };
 
 document.getElementById("resetAll").onclick = async ()=>{
-  if(!confirm("Hapus semua progres & statistik soal salah?")) return;
+  if(!confirm("Hapus semua progres & statistik soal salah? Ini memengaruhi kedua mode.")) return;
   try{
     await apiFetch("/api/stats","DELETE");
-    clearSession();
-    pos=0; score=0;
-    // also bust server daily cache by refetching
-    SET = await apiFetch("/api/daily");
-    document.getElementById("weakCount").textContent = SET.weak;
-    answers = new Array(SET.items.length).fill(null);
-    saveSession({date:SET.date, answers});
-    render();
+    clearKey(STORE_SESS);
+    clearKey(STORE_UNLIMITED);
+    if(MODE === "unlimited"){
+      U = { items: [], answers: [], pos: 0, score: 0, sectionFilter: U.sectionFilter };
+      document.getElementById("quiz").innerHTML =
+        `<div class="loader"><div class="spinner"></div><span>Memuat soal…</span></div>`;
+      await bootUnlimited(true);
+    } else {
+      pos=0; score=0;
+      SET = await apiFetch("/api/daily");
+      document.getElementById("weakCount").textContent = SET.weak;
+      answers = new Array(SET.items.length).fill(null);
+      saveJSON(STORE_SESS, {date:SET.date, answers});
+      render();
+    }
   }catch(e){
     alert("Gagal reset stats: "+e.message);
   }
